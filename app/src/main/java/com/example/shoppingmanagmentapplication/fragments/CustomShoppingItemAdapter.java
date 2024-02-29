@@ -1,10 +1,10 @@
 package com.example.shoppingmanagmentapplication.fragments;
 
 import android.annotation.SuppressLint;
+import android.content.Context;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.TextView;
@@ -13,24 +13,29 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.shoppingmanagmentapplication.R;
+import com.example.shoppingmanagmentapplication.firebase.ShoppingItemsService;
 import com.example.shoppingmanagmentapplication.model.ShoppingItem;
-import com.example.shoppingmanagmentapplication.model.ShoppingItemList;
-import com.example.shoppingmanagmentapplication.model.User;
+import com.example.shoppingmanagmentapplication.model.ActiveUser;
 import com.example.shoppingmanagmentapplication.model.eShoppingType;
+import com.example.shoppingmanagmentapplication.utils.ToastUtils;
+import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.OnFailureListener;
+import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.android.gms.tasks.Task;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArraySet;
 
 public class CustomShoppingItemAdapter extends RecyclerView.Adapter<CustomShoppingItemAdapter.MyHolderView> {
 
-    private List<ShoppingItem> usershoppingItemList;
-    private User user;
+    private final List<ShoppingItem> usershoppingItemList;
+    private Context context;
 
-    public CustomShoppingItemAdapter(User user , List<ShoppingItem> usersShoppingList)
+    public CustomShoppingItemAdapter(List<ShoppingItem> usersShoppingList, Context context)
     {
         this.usershoppingItemList = usersShoppingList;
-        this.user = user;
+        this.context = context;
     }
 
     public static class MyHolderView extends RecyclerView.ViewHolder {
@@ -58,7 +63,6 @@ public class CustomShoppingItemAdapter extends RecyclerView.Adapter<CustomShoppi
         return new MyHolderView(view);
     }
 
-    @SuppressLint("DefaultLocale")
     @Override
     public void onBindViewHolder(@NonNull CustomShoppingItemAdapter.MyHolderView holder, int position) {
         holder.itemName.setText(usershoppingItemList.get(position).getItemName());
@@ -67,8 +71,14 @@ public class CustomShoppingItemAdapter extends RecyclerView.Adapter<CustomShoppi
         holder.itemDelete.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                ShoppingItemList.removeShoppingItemOfUser(user, holder.getAdapterPosition());
-                notifyItemRemoved(holder.getAdapterPosition());
+                String itemId = usershoppingItemList.get(holder.getAdapterPosition()).getItemId();
+                ShoppingItemsService.tryRemoveShoppingItemOfUserFromDataBase(
+                        itemId,
+                        () -> {
+                            usershoppingItemList.remove(holder.getAdapterPosition());
+                            notifyItemRemoved(holder.getAdapterPosition());
+                        },
+                        (e) -> ToastUtils.createCustomToast("A failure occurred when trying to add the item", context));
             }
         });
     }

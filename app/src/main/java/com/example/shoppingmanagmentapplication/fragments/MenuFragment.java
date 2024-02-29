@@ -2,52 +2,48 @@ package com.example.shoppingmanagmentapplication.fragments;
 
 import android.os.Bundle;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.navigation.Navigation;
 import androidx.recyclerview.widget.DefaultItemAnimator;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import android.text.SpannableString;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageButton;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.example.shoppingmanagmentapplication.R;
+import com.example.shoppingmanagmentapplication.firebase.ShoppingItemsService;
+import com.example.shoppingmanagmentapplication.model.ActiveUser;
 import com.example.shoppingmanagmentapplication.model.ShoppingItem;
-import com.example.shoppingmanagmentapplication.model.ShoppingItemList;
-import com.example.shoppingmanagmentapplication.model.User;
-import com.example.shoppingmanagmentapplication.model.UserList;
+import com.example.shoppingmanagmentapplication.utils.ToastUtils;
+import com.google.firebase.database.ChildEventListener;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.Query;
+import com.google.firebase.database.ValueEventListener;
 
+import java.util.ArrayList;
 import java.util.List;
 
 
 public class MenuFragment extends Fragment {
 
-    private String username;
-    private String email;
-    private String password;
 
     private TextView welcomeMessage;
     private ImageButton addItemBtn;
     private RecyclerView itemRecyclerView;
     private CustomShoppingItemAdapter itemAdapter;
-    private final String LOGGED_USER_EMAIL = "logged_email";
-    private final String LOGGED_USER_NAME = "logged_username";
-    private final String LOGGED_USER_PASSWORD = "logged_password";
 
     public MenuFragment() {
 
-    }
-
-    public static MenuFragment newInstance(String param1, String param2) {
-        MenuFragment fragment = new MenuFragment();
-        Bundle args = new Bundle();
-
-        fragment.setArguments(args);
-        return fragment;
     }
 
     @Override
@@ -59,49 +55,73 @@ public class MenuFragment extends Fragment {
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
-        // Inflate the layout for this fragment
         View view =  inflater.inflate(R.layout.fragment_menu, container, false);
 
-        if(getArguments() != null)
-        {
-            username = getArguments().getString(LOGGED_USER_NAME);
-            email = getArguments().getString(LOGGED_USER_EMAIL);
-            password = getArguments().getString(LOGGED_USER_PASSWORD);
-        }
+        initializeUIReferencesAndValues(view);
+        initializeButtonsOnClickEvent(view);
+        initializeRecyclerList();
 
+        return view;
+    }
+
+    private void initializeUIReferencesAndValues(View view)
+    {
         welcomeMessage = view.findViewById(R.id.welcomeMessage);
         addItemBtn = view.findViewById(R.id.addItem);
         itemRecyclerView = view.findViewById(R.id.itemList);
 
-        welcomeMessage.setText(String.format("Hello %s!" , username));
+        welcomeMessage.setText(String.format("Hello %s!" , ActiveUser.getCurrentActiveUserUsername()));
+    }
 
+    private void initializeButtonsOnClickEvent(View view)
+    {
         addItemBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Bundle bundle = new Bundle();
-                bundle.putString(LOGGED_USER_EMAIL , email);
-                bundle.putString(LOGGED_USER_NAME, username);
-                bundle.putString(LOGGED_USER_PASSWORD, password);
-                Navigation.findNavController(view).navigate(R.id.action_menuFragment_to_addItemFragment , bundle);
+                Navigation.findNavController(view).navigate(R.id.action_menuFragment_to_addItemFragment);
             }
         });
-
-        initializeRecyclerList();
-
-
-        return view;
     }
 
     private void initializeRecyclerList()
     {
         LinearLayoutManager layoutManager = new LinearLayoutManager(getContext());
-        User loggedUser = UserList.getUserFromEmailAndPassword(email ,password);
-        itemAdapter = new CustomShoppingItemAdapter(loggedUser , ShoppingItemList.getShoppingItemListOfUser(loggedUser));
-
-
         itemRecyclerView.setLayoutManager(layoutManager);
         itemRecyclerView.setItemAnimator(new DefaultItemAnimator());
+        List<ShoppingItem> usersShoppingItems = new ArrayList<>();
+        itemAdapter = new CustomShoppingItemAdapter(usersShoppingItems, getContext());
         itemRecyclerView.setAdapter(itemAdapter);
-    }
+        String currentUserId = ActiveUser.getCurrentActiveUserUid();
 
+
+        DatabaseReference userItemsRef = ShoppingItemsService.getShoppingListDBOfUser(currentUserId);
+        userItemsRef.addChildEventListener(new ChildEventListener() {
+            @Override
+            public void onChildAdded(@NonNull DataSnapshot snapshot, @Nullable String previousChildName) {
+                ShoppingItem newShoppingItem = snapshot.getValue(ShoppingItem.class);
+                usersShoppingItems.add(newShoppingItem);
+                itemAdapter.notifyItemInserted(0);
+            }
+
+            @Override
+            public void onChildChanged(@NonNull DataSnapshot snapshot, @Nullable String previousChildName) {
+
+            }
+
+            @Override
+            public void onChildRemoved(@NonNull DataSnapshot snapshot) {
+
+            }
+
+            @Override
+            public void onChildMoved(@NonNull DataSnapshot snapshot, @Nullable String previousChildName) {
+
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+                ToastUtils.createCustomToast("an unexpected error occurred", getContext());
+            }
+        });
+    }
 }

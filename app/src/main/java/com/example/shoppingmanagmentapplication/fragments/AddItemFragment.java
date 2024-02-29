@@ -4,6 +4,7 @@ import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.os.Bundle;
 
+import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
 import androidx.navigation.Navigation;
 
@@ -16,47 +17,34 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.example.shoppingmanagmentapplication.R;
+import com.example.shoppingmanagmentapplication.firebase.ShoppingItemsService;
 import com.example.shoppingmanagmentapplication.model.ShoppingItem;
-import com.example.shoppingmanagmentapplication.model.ShoppingItemList;
-import com.example.shoppingmanagmentapplication.model.User;
+import com.example.shoppingmanagmentapplication.model.ActiveUser;
 import com.example.shoppingmanagmentapplication.model.eShoppingType;
-
-import org.w3c.dom.Text;
+import com.example.shoppingmanagmentapplication.utils.AddItemClientValidationUtils;
+import com.example.shoppingmanagmentapplication.utils.ToastUtils;
+import com.google.android.gms.tasks.OnFailureListener;
+import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
 
 import java.util.Arrays;
-import java.util.List;
-import java.util.stream.Collectors;
 
 
 public class AddItemFragment extends Fragment {
-
-    private String username;
-    private String email;
-    private String password;
     private EditText itemName;
     private EditText itemAmount;
     private TextView itemTypeSelector;
     private AlertDialog.Builder itemTypeSelectorDialog;
     private Button addItem;
-
-    private final String LOGGED_USER_EMAIL = "logged_email";
-    private final String LOGGED_USER_NAME = "logged_username";
-    private final String LOGGED_USER_PASSWORD = "logged_password";
     private final String[] shoppingTypes = Arrays.stream(eShoppingType.values())
             .map(Enum::name)
             .toArray(String[]::new);
-
-    private int selectedShoppingTypePosition;
+    private int selectedShoppingTypePosition = -1;
 
     public AddItemFragment() {
-        // Required empty public constructor
     }
 
-    public static AddItemFragment newInstance(String param1, String param2) {
-        AddItemFragment fragment = new AddItemFragment();
-
-        return fragment;
-    }
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -66,33 +54,26 @@ public class AddItemFragment extends Fragment {
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
-        // Inflate the layout for this fragment
         View view = inflater.inflate(R.layout.fragment_add_item, container, false);
 
-        if(getArguments() != null)
-        {
-            initializeLoggedUserInformation();
-        }
-
         initializeUIReferences(view);
+        initializeButtonsOnClick();
         initializeItemTypeSelectorDialog();
 
         return view;
     }
 
-    private void initializeLoggedUserInformation()
-    {
-        username = getArguments().getString(LOGGED_USER_NAME);
-        email = getArguments().getString(LOGGED_USER_EMAIL);
-        password = getArguments().getString(LOGGED_USER_PASSWORD);
-    }
+
     private void initializeUIReferences(View view)
     {
         itemName = view.findViewById(R.id.itemNameField);
         itemAmount = view.findViewById(R.id.itemAmountField);
         itemTypeSelector = view.findViewById(R.id.selectItemType);
         addItem = view.findViewById(R.id.addBtn);
+    }
 
+    private void initializeButtonsOnClick()
+    {
         itemTypeSelector.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -103,21 +84,27 @@ public class AddItemFragment extends Fragment {
         addItem.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if(validateUserInputData())
+                String name = itemName.getText().toString();
+                int amount = Integer.parseInt(itemAmount.getText().toString());
+
+                if(AddItemClientValidationUtils.validateItem(name, amount, selectedShoppingTypePosition, getContext()))
                 {
-                    ShoppingItemList.addShoppingItemOfUser(
-                            new User(username, email, password) ,
-                            new ShoppingItem(Enum.valueOf(eShoppingType.class,shoppingTypes[selectedShoppingTypePosition]) , Integer.parseInt(itemAmount.getText().toString()) , itemName.getText().toString()));
-                    Bundle bundle = new Bundle();
-                    bundle.putString(LOGGED_USER_NAME , username);
-                    bundle.putString(LOGGED_USER_EMAIL , email);
-                    bundle.putString(LOGGED_USER_PASSWORD , password);
-                    Navigation.findNavController(requireView()).navigate(R.id.action_addItemFragment_to_menuFragment , bundle);
+                    eShoppingType shoppingType = Enum.valueOf(eShoppingType.class,shoppingTypes[selectedShoppingTypePosition]);
+
+                    ShoppingItem newShoppingItem = new ShoppingItem(
+                            shoppingType,
+                            amount,
+                            name);
+
+                    
+                    ShoppingItemsService.tryAddShoppingItemOfUserToDatabase(
+                            newShoppingItem,
+                            () -> Navigation.findNavController(requireView()).navigate(R.id.action_addItemFragment_to_menuFragment),
+                            (e)-> ToastUtils.createCustomToast("A failure occurred when trying to add the item", getContext()));
                 }
                 else
                 {
-                    Toast.makeText(getContext(), "One of the field are invalid",
-                            Toast.LENGTH_SHORT).show();
+                    ToastUtils.createCustomToast("One of the field are invalid",getContext());
                 }
             }
         });
@@ -149,30 +136,5 @@ public class AddItemFragment extends Fragment {
                 dialog.dismiss();
             }
         });
-    }
-
-    private boolean validateUserInputData()
-    {
-        if(checkIfEmpty(itemName.getText()) || checkIfEmpty(itemAmount.getText()) || itemTypeSelector.getText().toString().equals("Select Item Type"))
-        {
-            return false;
-        }
-
-        if(itemName.getText().toString().length() > 20)
-        {
-            return false;
-        }
-
-        if(Integer.parseInt(itemAmount.getText().toString()) <= 0)
-        {
-            return false;
-        }
-
-        return true;
-    }
-
-    private <T> boolean checkIfEmpty(T itemProperty)
-    {
-        return itemProperty.toString().trim().isEmpty();
     }
 }
